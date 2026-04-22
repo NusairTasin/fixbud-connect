@@ -8,35 +8,44 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* FixBud — warm, trustworthy palette */
+    --background: 36 33% 97%;
+    --foreground: 222 35% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 35% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222 35% 12%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Deep teal — trust + craft */
+    --primary: 188 78% 24%;
+    --primary-foreground: 36 33% 97%;
+    --primary-glow: 188 70% 38%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Warm amber — action, tools, energy */
+    --accent: 32 96% 52%;
+    --accent-foreground: 222 35% 12%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --secondary: 188 30% 92%;
+    --secondary-foreground: 188 78% 18%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --muted: 36 20% 92%;
+    --muted-foreground: 222 15% 40%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 36 33% 97%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 36 20% 88%;
+    --input: 36 20% 88%;
+    --ring: 188 78% 24%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    --gradient-hero: linear-gradient(135deg, hsl(188 78% 24%) 0%, hsl(188 70% 38%) 60%, hsl(32 96% 52%) 130%);
+    --gradient-soft: linear-gradient(180deg, hsl(36 33% 97%) 0%, hsl(188 30% 95%) 100%);
+    --shadow-elegant: 0 20px 50px -20px hsl(188 78% 24% / 0.25);
+    --shadow-soft: 0 4px 20px -8px hsl(222 35% 12% / 0.1);
 
     --sidebar-background: 0 0% 98%;
 
