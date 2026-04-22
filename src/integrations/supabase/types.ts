@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      bids: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          job_id: string
+          message: string | null
+          status: Database["public"]["Enums"]["bid_status"]
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          job_id: string
+          message?: string | null
+          status?: Database["public"]["Enums"]["bid_status"]
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          job_id?: string
+          message?: string | null
+          status?: Database["public"]["Enums"]["bid_status"]
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bids_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "job_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bids_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_requests: {
         Row: {
           budget: number
@@ -220,6 +268,7 @@ export type Database = {
     }
     Enums: {
       app_role: "customer" | "worker"
+      bid_status: "pending" | "accepted" | "rejected" | "withdrawn"
       job_status: "pending" | "accepted" | "completed" | "cancelled"
     }
     CompositeTypes: {
@@ -349,6 +398,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["customer", "worker"],
+      bid_status: ["pending", "accepted", "rejected", "withdrawn"],
       job_status: ["pending", "accepted", "completed", "cancelled"],
     },
   },
