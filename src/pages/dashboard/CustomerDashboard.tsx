@@ -6,9 +6,16 @@ import { DashboardShell } from "@/components/fixbud/DashboardShell";
 import { PostJobDialog } from "@/components/fixbud/PostJobDialog";
 import { ReviewDialog } from "@/components/fixbud/ReviewDialog";
 import { StatusBadge } from "@/components/fixbud/StatusBadge";
+import { BidsList } from "@/components/fixbud/BidsList";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Wrench, Star } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Wrench, Star, ChevronDown } from "lucide-react";
 
 interface Category {
   id: string;
@@ -28,6 +35,7 @@ interface Job {
   created_at: string;
   service_categories: { name: string } | null;
   worker: { id: string; name: string } | null;
+  bid_count?: { count: number }[];
 }
 
 const CustomerDashboard = () => {
@@ -46,7 +54,9 @@ const CustomerDashboard = () => {
       supabase.from("service_categories").select("*").order("name"),
       supabase
         .from("job_requests")
-        .select("*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name)")
+        .select(
+          "*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name), bid_count:bids(count)",
+        )
         .eq("customer_id", user.id)
         .order("created_at", { ascending: false }),
       supabase.from("reviews").select("job_id").eq("customer_id", user.id),
