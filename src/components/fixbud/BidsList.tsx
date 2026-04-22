@@ -91,7 +91,7 @@ export const BidsList = ({ jobId, canAccept, onAccepted }: Props) => {
               )}
               {b.worker && b.worker.average_rating > 0 && (
                 <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                  <Star className="h-3 w-3 fill-current text-amber-500" />
+                  <Star className="h-3 w-3 fill-current text-primary" />
                   {b.worker.average_rating}
                 </span>
               )}
