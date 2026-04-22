@@ -132,6 +132,7 @@ const CustomerDashboard = () => {
             {jobs.map((j) => {
               const canReview =
                 j.status === "completed" && j.worker_id && !reviewedJobIds.has(j.id);
+              const bidCount = j.bid_count?.[0]?.count ?? 0;
               return (
                 <Card key={j.id} className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -139,6 +140,11 @@ const CustomerDashboard = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold">{j.title}</h3>
                         <StatusBadge status={j.status} />
+                        {j.status === "pending" && bidCount > 0 && (
+                          <Badge variant="secondary">
+                            {bidCount} {bidCount === 1 ? "bid" : "bids"}
+                          </Badge>
+                        )}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {j.service_categories?.name} • ${j.budget.toLocaleString()}
@@ -177,6 +183,21 @@ const CustomerDashboard = () => {
                       )}
                     </div>
                   </div>
+                  {j.status === "pending" && (
+                    <Collapsible className="mt-3">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="px-2 text-primary">
+                          <ChevronDown className="h-4 w-4" />
+                          {bidCount > 0
+                            ? `Review ${bidCount} ${bidCount === 1 ? "bid" : "bids"}`
+                            : "View bids"}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-3">
+                        <BidsList jobId={j.id} canAccept onAccepted={load} />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </Card>
               );
             })}
