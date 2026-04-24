@@ -7,6 +7,7 @@ import { PostJobDialog } from "@/components/fixbud/PostJobDialog";
 import { ReviewDialog } from "@/components/fixbud/ReviewDialog";
 import { StatusBadge } from "@/components/fixbud/StatusBadge";
 import { BidsList } from "@/components/fixbud/BidsList";
+import { ShareAddressDialog } from "@/components/fixbud/ShareAddressDialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,13 @@ interface Job {
   worker_id: string | null;
   category_id: string;
   created_at: string;
+  shared_address_id: string | null;
+  shared_address: {
+    label: string;
+    address_line1: string;
+    city: string;
+    country: string;
+  } | null;
   service_categories: { name: string } | null;
   worker: { id: string; name: string } | null;
   bid_count?: { count: number }[];
@@ -55,7 +63,7 @@ const CustomerDashboard = () => {
       supabase
         .from("job_requests")
         .select(
-          "*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name), bid_count:bids(count)",
+          "*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name), shared_address:addresses(label, address_line1, city, country), bid_count:bids(count)",
         )
         .eq("customer_id", user.id)
         .order("created_at", { ascending: false }),
@@ -172,6 +180,13 @@ const CustomerDashboard = () => {
                       {j.status === "completed" && reviewedJobIds.has(j.id) && (
                         <span className="text-xs text-muted-foreground">Reviewed ✓</span>
                       )}
+                      {(j.status === "accepted" || j.status === "completed") && (
+                        <ShareAddressDialog
+                          jobId={j.id}
+                          currentAddressId={j.shared_address_id}
+                          onShared={load}
+                        />
+                      )}
                       {(j.status === "pending" || j.status === "accepted") && (
                         <Button
                           variant="outline"
@@ -183,6 +198,14 @@ const CustomerDashboard = () => {
                       )}
                     </div>
                   </div>
+                  {j.shared_address && (j.status === "accepted" || j.status === "completed") && (
+                    <div className="mt-3 rounded-md bg-muted/40 p-3 text-sm">
+                      <span className="font-medium">Shared address:</span>{" "}
+                      <span className="text-muted-foreground">
+                        {j.shared_address.label} — {j.shared_address.address_line1}, {j.shared_address.city}, {j.shared_address.country}
+                      </span>
+                    </div>
+                  )}
                   {j.status === "pending" && (
                     <Collapsible className="mt-3">
                       <CollapsibleTrigger asChild>
