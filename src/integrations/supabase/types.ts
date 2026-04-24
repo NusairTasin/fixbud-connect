@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      addresses: {
+        Row: {
+          address_line1: string
+          address_line2: string | null
+          city: string
+          country: string
+          created_at: string
+          id: string
+          is_default: boolean
+          label: string
+          lat: number
+          lng: number
+          postal_code: string | null
+          region: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_line1: string
+          address_line2?: string | null
+          city: string
+          country: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label: string
+          lat: number
+          lng: number
+          postal_code?: string | null
+          region?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string | null
+          city?: string
+          country?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          lat?: number
+          lng?: number
+          postal_code?: string | null
+          region?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bids: {
         Row: {
           amount: number
@@ -70,6 +129,7 @@ export type Database = {
           customer_id: string
           description: string
           id: string
+          shared_address_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at: string
@@ -82,6 +142,7 @@ export type Database = {
           customer_id: string
           description: string
           id?: string
+          shared_address_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at?: string
@@ -94,6 +155,7 @@ export type Database = {
           customer_id?: string
           description?: string
           id?: string
+          shared_address_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title?: string
           updated_at?: string
@@ -115,6 +177,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "job_requests_shared_address_id_fkey"
+            columns: ["shared_address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "job_requests_worker_id_fkey"
             columns: ["worker_id"]
             isOneToOne: false
@@ -125,27 +194,51 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address_line1: string | null
+          address_line2: string | null
           average_rating: number
+          city: string | null
+          country: string | null
           created_at: string
           email: string
           id: string
+          lat: number | null
+          lng: number | null
           name: string
+          postal_code: string | null
+          region: string | null
           updated_at: string
         }
         Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
           average_rating?: number
+          city?: string | null
+          country?: string | null
           created_at?: string
           email: string
           id: string
+          lat?: number | null
+          lng?: number | null
           name: string
+          postal_code?: string | null
+          region?: string | null
           updated_at?: string
         }
         Update: {
+          address_line1?: string | null
+          address_line2?: string | null
           average_rating?: number
+          city?: string | null
+          country?: string | null
           created_at?: string
           email?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           name?: string
+          postal_code?: string | null
+          region?: string | null
           updated_at?: string
         }
         Relationships: []

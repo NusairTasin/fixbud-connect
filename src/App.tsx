@@ -11,6 +11,8 @@ import DashboardRouter from "./pages/DashboardRouter.tsx";
 import CustomerDashboard from "./pages/dashboard/CustomerDashboard.tsx";
 import WorkerDashboard from "./pages/dashboard/WorkerDashboard.tsx";
 import WorkerProfile from "./pages/WorkerProfile.tsx";
+import ProfilePage from "./pages/Profile.tsx";
+import MapPage from "./pages/MapPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -54,6 +56,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <WorkerProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/map"
+              element={
+                <ProtectedRoute requiredRole="customer">
+                  <MapPage />
                 </ProtectedRoute>
               }
             />
