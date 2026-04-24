@@ -234,7 +234,7 @@ const ProfilePage = () => {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild><span className="hidden" /></DialogTrigger>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit address" : "New address"}</DialogTitle>
           </DialogHeader>

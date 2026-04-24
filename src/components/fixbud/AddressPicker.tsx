@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
@@ -17,6 +17,9 @@ const DefaultIcon = L.icon({
   iconAnchor: [12, 41],
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Default location: Dhaka, Bangladesh
+const DEFAULT_POS: [number, number] = [23.8103, 90.4125];
 
 export interface AddressData {
   address_line1: string;
@@ -56,6 +59,28 @@ const Recenter = ({ pos }: { pos: [number, number] }) => {
   return null;
 };
 
+// Ensure Leaflet recalculates size when its container becomes visible
+// (critical inside Dialogs/modals on mobile where the map renders 0×0 first)
+const InvalidateOnMount = () => {
+  const map = useMap();
+  useEffect(() => {
+    const t1 = setTimeout(() => map.invalidateSize(), 50);
+    const t2 = setTimeout(() => map.invalidateSize(), 300);
+    const t3 = setTimeout(() => map.invalidateSize(), 800);
+    const onResize = () => map.invalidateSize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [map]);
+  return null;
+};
+
 interface Props {
   value: Partial<AddressData>;
   onChange: (next: AddressData) => void;
@@ -64,9 +89,10 @@ interface Props {
 export const AddressPicker = ({ value, onChange }: Props) => {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [pos, setPos] = useState<[number, number]>([
-    value.lat ?? 40.7128,
-    value.lng ?? -74.006,
+    value.lat ?? DEFAULT_POS[0],
+    value.lng ?? DEFAULT_POS[1],
   ]);
   const [form, setForm] = useState<AddressData>({
     address_line1: value.address_line1 ?? "",
@@ -75,16 +101,98 @@ export const AddressPicker = ({ value, onChange }: Props) => {
     region: value.region ?? "",
     postal_code: value.postal_code ?? "",
     country: value.country ?? "",
-    lat: value.lat ?? pos[0],
-    lng: value.lng ?? pos[1],
+    lat: value.lat ?? DEFAULT_POS[0],
+    lng: value.lng ?? DEFAULT_POS[1],
   });
   const markerRef = useRef<L.Marker>(null);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
-  // Sync upward whenever form/pos changes
+  // Sync upward whenever form/pos changes (use ref to avoid loops if parent
+  // passes a new onChange identity each render).
   useEffect(() => {
-    onChange({ ...form, lat: pos[0], lng: pos[1] });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onChangeRef.current({ ...form, lat: pos[0], lng: pos[1] });
   }, [form, pos]);
+
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${lat}&lon=${lng}`,
+        { headers: { Accept: "application/json" } },
+      );
+      const data: NominatimResult = await res.json();
+      if (data?.address) applyResult({ ...data, lat: String(lat), lon: String(lng) });
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const applyResult = (r: NominatimResult) => {
+    const a = r.address;
+    const line1 = [a.house_number, a.road].filter(Boolean).join(" ") ||
+      a.suburb || a.neighbourhood || "";
+    const lat = parseFloat(r.lat);
+    const lng = parseFloat(r.lon);
+    setPos([lat, lng]);
+    setForm((prev) => ({
+      ...prev,
+      address_line1: line1 || prev.address_line1,
+      city: a.city || a.town || a.village || prev.city,
+      region: a.state || a.region || prev.region,
+      postal_code: a.postcode || prev.postal_code,
+      country: a.country || prev.country,
+      lat,
+      lng,
+    }));
+  };
+
+  const requestLocation = useCallback((silent = false) => {
+    if (!navigator.geolocation) {
+      if (!silent) toast.error("Geolocation not supported in this browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        const lat = p.coords.latitude;
+        const lng = p.coords.longitude;
+        setPos([lat, lng]);
+        reverseGeocode(lat, lng);
+      },
+      (err) => {
+        setLocating(false);
+        if (silent) return;
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Using default (Dhaka).");
+        } else {
+          toast.error("Could not get your location.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }, [reverseGeocode]);
+
+  // On first mount, if no preset address, ask for permission and use it
+  const askedRef = useRef(false);
+  useEffect(() => {
+    if (askedRef.current) return;
+    askedRef.current = true;
+    if (value.lat != null && value.lng != null) return; // user already has one
+    // Try silently using the Permissions API first
+    const tryGeo = () => requestLocation(false);
+    if ("permissions" in navigator && (navigator as Navigator).permissions?.query) {
+      (navigator as Navigator).permissions
+        .query({ name: "geolocation" as PermissionName })
+        .then((status) => {
+          if (status.state === "granted" || status.state === "prompt") tryGeo();
+        })
+        .catch(() => tryGeo());
+    } else {
+      tryGeo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -109,55 +217,6 @@ export const AddressPicker = ({ value, onChange }: Props) => {
     }
   };
 
-  const reverseGeocode = async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${lat}&lon=${lng}`,
-        { headers: { Accept: "application/json" } },
-      );
-      const data: NominatimResult = await res.json();
-      if (data?.address) applyResult({ ...data, lat: String(lat), lon: String(lng) });
-    } catch {
-      // silent
-    }
-  };
-
-  const applyResult = (r: NominatimResult) => {
-    const a = r.address;
-    const line1 = [a.house_number, a.road].filter(Boolean).join(" ") ||
-      a.suburb || a.neighbourhood || "";
-    const lat = parseFloat(r.lat);
-    const lng = parseFloat(r.lon);
-    setPos([lat, lng]);
-    setForm((prev) => ({
-      ...prev,
-      address_line1: line1 || prev.address_line1,
-      city: a.city || a.town || a.village || prev.city,
-      region: a.state || a.region || prev.region,
-      postal_code: a.postcode || prev.postal_code,
-      country: a.country || prev.country,
-      lat,
-      lng,
-    }));
-  };
-
-  const useMyLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported in this browser.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        const lat = p.coords.latitude;
-        const lng = p.coords.longitude;
-        setPos([lat, lng]);
-        reverseGeocode(lat, lng);
-      },
-      () => toast.error("Could not get your location."),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  };
-
   const eventHandlers = useMemo(
     () => ({
       dragend() {
@@ -168,12 +227,12 @@ export const AddressPicker = ({ value, onChange }: Props) => {
         reverseGeocode(ll.lat, ll.lng);
       },
     }),
-    [],
+    [reverseGeocode],
   );
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSearch} className="flex gap-2">
+      <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -183,22 +242,30 @@ export const AddressPicker = ({ value, onChange }: Props) => {
             className="pl-8"
           />
         </div>
-        <Button type="submit" disabled={searching} variant="secondary">
-          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Find
-        </Button>
-        <Button type="button" variant="outline" onClick={useMyLocation}>
-          <Locate className="h-4 w-4" />
-          My location
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={searching} variant="secondary" className="flex-1 sm:flex-none">
+            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Find
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => requestLocation(false)}
+            disabled={locating}
+            className="flex-1 sm:flex-none"
+          >
+            {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Locate className="h-4 w-4" />}
+            My location
+          </Button>
+        </div>
       </form>
 
-      <div className="h-64 overflow-hidden rounded-lg border">
+      <div className="h-56 overflow-hidden rounded-lg border sm:h-64">
         <MapContainer
           center={pos}
           zoom={13}
           style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom
+          scrollWheelZoom={false}
         >
           <TileLayer
             attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
@@ -211,6 +278,7 @@ export const AddressPicker = ({ value, onChange }: Props) => {
             ref={markerRef}
           />
           <Recenter pos={pos} />
+          <InvalidateOnMount />
         </MapContainer>
       </div>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
