@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardShell } from "@/components/fixbud/DashboardShell";
@@ -17,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Search, X } from "lucide-react";
+import { Loader2, CheckCircle2, Search, X, MapPin, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 interface Job {
@@ -32,6 +33,15 @@ interface Job {
   category_id: string;
   service_categories: { name: string } | null;
   customer: { name: string } | null;
+  shared_address?: {
+    label: string;
+    address_line1: string;
+    address_line2: string | null;
+    city: string;
+    region: string | null;
+    postal_code: string | null;
+    country: string;
+  } | null;
 }
 
 interface Category {
@@ -52,6 +62,7 @@ const WorkerDashboard = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [myBids, setMyBids] = useState<Record<string, MyBid>>({});
   const [loading, setLoading] = useState(true);
+  const [hasLocation, setHasLocation] = useState(true);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -63,18 +74,20 @@ const WorkerDashboard = () => {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [jobsRes, catsRes, bidsRes] = await Promise.all([
+    const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
       supabase
         .from("job_requests")
         .select(
-          "*, service_categories(name), customer:profiles!job_requests_customer_id_fkey(name)",
+          "*, service_categories(name), customer:profiles!job_requests_customer_id_fkey(name), shared_address:addresses(label, address_line1, address_line2, city, region, postal_code, country)",
         )
         .order("created_at", { ascending: false }),
       supabase.from("service_categories").select("id, name").order("name"),
       supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
+      supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
     ]);
     const all = (jobsRes.data ?? []) as unknown as Job[];
     setCategories(catsRes.data ?? []);
+    setHasLocation(!!(profRes.data?.lat && profRes.data?.lng));
     const bidsMap: Record<string, MyBid> = {};
     (bidsRes.data ?? []).forEach((b) => {
       bidsMap[b.job_id] = b as MyBid;
@@ -168,6 +181,30 @@ const WorkerDashboard = () => {
             {j.customer && ` • From ${j.customer.name}`}
           </p>
           <p className="mt-2 text-sm">{j.description}</p>
+          {mode === "active" && (
+            <div className="mt-3 rounded-md bg-muted/40 p-3 text-sm">
+              {j.shared_address ? (
+                <>
+                  <div className="flex items-center gap-1 font-medium">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    {j.shared_address.label}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {j.shared_address.address_line1}
+                    {j.shared_address.address_line2 ? `, ${j.shared_address.address_line2}` : ""}<br />
+                    {j.shared_address.city}
+                    {j.shared_address.region ? `, ${j.shared_address.region}` : ""}
+                    {j.shared_address.postal_code ? ` ${j.shared_address.postal_code}` : ""}<br />
+                    {j.shared_address.country}
+                  </div>
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  Waiting for the customer to share their address…
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           {mode === "browse" &&
@@ -175,13 +212,17 @@ const WorkerDashboard = () => {
               <Button size="sm" variant="outline" disabled>
                 Bid placed
               </Button>
-            ) : (
+            ) : hasLocation ? (
               <BidDialog
                 jobId={j.id}
                 jobTitle={j.title}
                 suggested={j.budget}
                 onPlaced={load}
               />
+            ) : (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/profile">Add location to bid</Link>
+              </Button>
             ))}
           {mode === "active" && j.status === "accepted" && (
             <Button size="sm" onClick={() => handleComplete(j.id)}>
@@ -196,6 +237,20 @@ const WorkerDashboard = () => {
 
   return (
     <DashboardShell title="Job board" subtitle="Browse open requests and manage your active work.">
+      {!loading && !hasLocation && (
+        <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-primary p-4">
+          <AlertTriangle className="h-5 w-5 text-primary" />
+          <div className="flex-1">
+            <p className="font-medium">Add your service location</p>
+            <p className="text-sm text-muted-foreground">
+              You need a location on your profile before you can bid on jobs.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link to="/profile">Add location</Link>
+          </Button>
+        </Card>
+      )}
       {loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
