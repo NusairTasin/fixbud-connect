@@ -1,6 +1,15 @@
-import { Link } from "react-router-dom";
-import { Wrench, ShieldCheck, Sparkles, ArrowRight, Hammer, Search } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Wrench, ShieldCheck, Sparkles, ArrowRight, Hammer, Search, Menu, LayoutDashboard, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const features = [
   {
@@ -21,6 +30,16 @@ const features = [
 ];
 
 const Index = () => {
+  const { session, loading, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const primaryHref = session ? "/dashboard" : "/auth";
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/", { replace: true });
+  };
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       {/* Header */}
@@ -31,14 +50,74 @@ const Index = () => {
           </div>
           <span className="text-xl font-bold tracking-tight">FixBud</span>
         </div>
-        <nav className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/auth">Sign in</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link to="/auth">Get started</Link>
-          </Button>
+        <nav className="hidden items-center gap-2 sm:flex">
+          {loading ? null : session ? (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/dashboard">Dashboard</Link>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
+                Sign out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/auth">Sign in</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to="/auth">Get started</Link>
+              </Button>
+            </>
+          )}
         </nav>
+
+        <div className="sm:hidden">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Open menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[320px]">
+              <SheetHeader>
+                <SheetTitle>Menu</SheetTitle>
+              </SheetHeader>
+
+              <div className="mt-6 space-y-2">
+                {loading ? null : session ? (
+                  <>
+                    <SheetClose asChild>
+                      <Button variant="ghost" className="w-full justify-start" asChild>
+                        <Link to="/dashboard">
+                          <LayoutDashboard className="h-4 w-4" />
+                          Dashboard
+                        </Link>
+                      </Button>
+                    </SheetClose>
+                    <Button variant="outline" className="w-full" onClick={handleSignOut}>
+                      <LogOut className="h-4 w-4" />
+                      Sign out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <SheetClose asChild>
+                      <Button variant="ghost" className="w-full justify-start" asChild>
+                        <Link to="/auth">Sign in</Link>
+                      </Button>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Button className="w-full" asChild>
+                        <Link to="/auth">Get started</Link>
+                      </Button>
+                    </SheetClose>
+                  </>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
       {/* Hero */}
@@ -67,7 +146,7 @@ const Index = () => {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="group">
-                <Link to="/auth">
+                <Link to={primaryHref}>
                   <Search className="h-4 w-4" />
                   Find a pro
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -79,7 +158,7 @@ const Index = () => {
                 variant="outline"
                 className="border-primary/20 bg-card hover:bg-secondary"
               >
-                <Link to="/auth">
+                <Link to={primaryHref}>
                   <Hammer className="h-4 w-4" />
                   Offer your services
                 </Link>
@@ -165,7 +244,7 @@ const Index = () => {
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button asChild size="lg" variant="secondary">
-              <Link to="/auth">Find a pro</Link>
+              <Link to={primaryHref}>Find a pro</Link>
             </Button>
             <Button
               asChild
@@ -173,7 +252,7 @@ const Index = () => {
               variant="outline"
               className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
             >
-              <Link to="/auth">Offer your services</Link>
+              <Link to={primaryHref}>Offer your services</Link>
             </Button>
           </div>
         </div>

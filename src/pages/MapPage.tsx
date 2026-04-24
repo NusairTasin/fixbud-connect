@@ -57,6 +57,17 @@ const MapPage = () => {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [selectedAddrId, setSelectedAddrId] = useState<string>("");
 
+  const getGeoErrorMessage = (err: GeolocationPositionError) => {
+    // 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
+    if (!window.isSecureContext) {
+      return "Location requires HTTPS (or http://localhost). Open the app on localhost or serve over HTTPS.";
+    }
+    if (err.code === 1) return "Location permission denied. Enable it in your browser site settings.";
+    if (err.code === 2) return "Location unavailable. Check GPS/Wi‑Fi and try again.";
+    if (err.code === 3) return "Location request timed out. Try again.";
+    return err.message || "Could not get your location.";
+  };
+
   useEffect(() => {
     (async () => {
       if (!user) return;
@@ -101,15 +112,40 @@ const MapPage = () => {
     if (a) setCenter([a.lat, a.lng]);
   };
 
-  const useBrowserLocation = () => {
+  const useBrowserLocation = async () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
       return;
     }
+    // Browsers deny geolocation on non-secure origins by default.
+    if (!window.isSecureContext) {
+      toast.error(
+        "Location is blocked because this site is not secure. Use http://localhost:8080 or HTTPS.",
+      );
+      return;
+    }
+
+    // If the user previously denied location for this origin, most browsers will not show
+    // a popup again; they fail immediately with PERMISSION_DENIED.
+    if ("permissions" in navigator) {
+      try {
+        const status = await navigator.permissions.query({
+          // Permissions API uses different types across browsers
+          name: "geolocation" as PermissionName,
+        });
+        if (status.state === "denied") {
+          toast.error("Location is blocked for this site. Enable it in your browser site settings.");
+          return;
+        }
+      } catch {
+        // Ignore; we'll fall back to getCurrentPosition error codes.
+      }
+    }
+
     navigator.geolocation.getCurrentPosition(
       (p) => setCenter([p.coords.latitude, p.coords.longitude]),
-      () => toast.error("Could not get your location."),
-      { enableHighAccuracy: true, timeout: 10000 },
+      (err) => toast.error(getGeoErrorMessage(err)),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   };
 

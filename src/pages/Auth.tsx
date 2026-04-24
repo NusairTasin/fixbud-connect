@@ -21,8 +21,10 @@ const Auth = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && session && role) {
-      navigate(role === "worker" ? "/dashboard/worker" : "/dashboard/customer", { replace: true });
+    // Don't block navigation on `role` being loaded; `DashboardRouter` will
+    // immediately route to the correct dashboard once role is available.
+    if (!authLoading && session) {
+      navigate("/dashboard", { replace: true });
     }
   }, [session, role, authLoading, navigate]);
 

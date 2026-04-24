@@ -74,39 +74,140 @@ const WorkerDashboard = () => {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
-      supabase
-        .from("job_requests")
-        .select(
-          "*, service_categories(name), customer:profiles!job_requests_customer_id_fkey(name), shared_address:addresses(label, address_line1, address_line2, city, region, postal_code, country)",
-        )
-        .order("created_at", { ascending: false }),
-      supabase.from("service_categories").select("id, name").order("name"),
-      supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
-      supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
-    ]);
-    const all = (jobsRes.data ?? []) as unknown as Job[];
-    setCategories(catsRes.data ?? []);
-    setHasLocation(!!(profRes.data?.lat && profRes.data?.lng));
-    const bidsMap: Record<string, MyBid> = {};
-    (bidsRes.data ?? []).forEach((b) => {
-      bidsMap[b.job_id] = b as MyBid;
-    });
-    setMyBids(bidsMap);
-    setAvailable(all.filter((j) => j.status === "pending" && !j.worker_id));
-    setActive(
-      all.filter(
-        (j) =>
-          j.worker_id === user.id &&
-          (j.status === "accepted" || j.status === "completed"),
-      ),
-    );
-    setLoading(false);
+    try {
+      const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
+        supabase
+          .from("job_requests")
+          .select(
+            "*, service_categories(name), customer:profiles!job_requests_customer_id_fkey(name), shared_address:addresses!job_requests_shared_address_id_fkey(label, address_line1, address_line2, city, region, postal_code, country)",
+          )
+          .order("created_at", { ascending: false }),
+        supabase.from("service_categories").select("id, name").order("name"),
+        supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
+        supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
+      ]);
+      if (jobsRes.error) throw jobsRes.error;
+      if (catsRes.error) throw catsRes.error;
+      const all = (jobsRes.data ?? []) as unknown as Job[];
+      setCategories(catsRes.data ?? []);
+      setHasLocation(!!(profRes.data?.lat && profRes.data?.lng));
+      const bidsMap: Record<string, MyBid> = {};
+      (bidsRes.data ?? []).forEach((b) => {
+        bidsMap[b.job_id] = b as MyBid;
+      });
+      setMyBids(bidsMap);
+      setAvailable(all.filter((j) => j.status === "pending" && !j.worker_id));
+      setActive(
+        all.filter(
+          (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
+        ),
+      );
+    } catch (err: any) {
+      console.error("WorkerDashboard rich query failed:", err);
+      toast.error(err?.message ?? "Unable to load jobs. Please try again.");
+      try {
+        const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
+          supabase.from("job_requests").select("*").order("created_at", { ascending: false }),
+          supabase.from("service_categories").select("id, name").order("name"),
+          supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
+          supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
+        ]);
+        if (jobsRes.error) throw jobsRes.error;
+        const all = (jobsRes.data ?? []) as any[];
+        setCategories(catsRes.data ?? []);
+        setHasLocation(!!(profRes.data?.lat && profRes.data?.lng));
+        const bidsMap: Record<string, MyBid> = {};
+        (bidsRes.data ?? []).forEach((b) => {
+          bidsMap[b.job_id] = b as MyBid;
+        });
+        setMyBids(bidsMap);
+        const mapped: Job[] = all.map((r) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          status: r.status,
+          budget: r.budget,
+          worker_id: r.worker_id ?? null,
+          customer_id: r.customer_id ?? "",
+          created_at: r.created_at,
+          category_id: r.category_id,
+          service_categories: null,
+          customer: null,
+          shared_address: null,
+        }));
+        setAvailable(mapped.filter((j) => j.status === "pending" && !j.worker_id));
+        setActive(
+          mapped.filter(
+            (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
+          ),
+        );
+      } catch (err2: any) {
+        console.error("WorkerDashboard fallback query failed:", err2);
+        setCategories([]);
+        setMyBids({});
+        setAvailable([]);
+        setActive([]);
+        setHasLocation(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Realtime: re-fetch on any job_requests or bids change visible to this worker
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`worker-dashboard-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_requests" },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bids", filter: `worker_id=eq.${user.id}` },
+        () => load(),
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
+
+  const handleAcceptAtBudget = async (jobId: string) => {
+    if (!user) return;
+    // Directly update the job — the worker RLS UPDATE policy allows this
+    // (pending job with no worker assigned). Then reject any competing bids.
+    const { error, count } = await supabase
+      .from("job_requests")
+      .update({ worker_id: user.id, status: "accepted" })
+      .eq("id", jobId)
+      .eq("status", "pending")
+      .is("worker_id", null)
+      .select("id", { count: "exact", head: true });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (count === 0) {
+      toast.error("Job is no longer available.");
+      load();
+      return;
+    }
+    // Reject any pending bids on this job (best-effort, non-blocking)
+    await supabase
+      .from("bids")
+      .update({ status: "rejected" })
+      .eq("job_id", jobId)
+      .eq("status", "pending");
+    toast.success("Job accepted!");
+    load();
+  };
 
   const handleComplete = async (jobId: string) => {
     const { error } = await supabase
@@ -213,15 +314,26 @@ const WorkerDashboard = () => {
                 Bid placed
               </Button>
             ) : hasLocation ? (
-              <BidDialog
-                jobId={j.id}
-                jobTitle={j.title}
-                suggested={j.budget}
-                onPlaced={load}
-              />
+              <>
+                <Button size="sm" onClick={() => handleAcceptAtBudget(j.id)}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Accept at ${j.budget.toLocaleString()}
+                </Button>
+                <BidDialog
+                  jobId={j.id}
+                  jobTitle={j.title}
+                  suggested={j.budget}
+                  onPlaced={load}
+                  trigger={
+                    <Button size="sm" variant="outline">
+                      Place bid
+                    </Button>
+                  }
+                />
+              </>
             ) : (
               <Button size="sm" variant="outline" asChild>
-                <Link to="/profile">Add location to bid</Link>
+                <Link to="/profile">Add location to accept/bid</Link>
               </Button>
             ))}
           {mode === "active" && j.status === "accepted" && (

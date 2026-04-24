@@ -33,12 +33,17 @@ interface SavedAddress {
   is_default: boolean;
 }
 
+interface Profile {
+  default_address_id: string | null;
+}
+
 const ProfilePage = () => {
   const { user, role } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workerAddr, setWorkerAddr] = useState<Partial<AddressData>>({});
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [defaultAddressId, setDefaultAddressId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SavedAddress | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
@@ -47,14 +52,38 @@ const ProfilePage = () => {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [profRes, addrRes] = await Promise.all([
-      supabase.from("profiles").select(
-        "address_line1, address_line2, city, region, postal_code, country, lat, lng",
-      ).eq("id", user.id).maybeSingle(),
-      supabase.from("addresses").select("*").eq("user_id", user.id).order("created_at"),
-    ]);
-    if (profRes.data) setWorkerAddr(profRes.data as Partial<AddressData>);
-    setAddresses((addrRes.data ?? []) as SavedAddress[]);
+    try {
+      // Try to fetch with default_address_id first (migration applied)
+      const [profRes, addrRes] = await Promise.all([
+        supabase.from("profiles").select(
+          "address_line1, address_line2, city, region, postal_code, country, lat, lng, default_address_id",
+        ).eq("id", user.id).maybeSingle(),
+        supabase.from("addresses").select("*").eq("user_id", user.id).order("created_at"),
+      ]);
+      
+      if (profRes.data) {
+        const data = profRes.data as any;
+        const { default_address_id, ...addrData } = data;
+        setWorkerAddr(addrData);
+        setDefaultAddressId(default_address_id ?? null);
+      }
+      setAddresses((addrRes.data ?? []) as SavedAddress[]);
+    } catch (error: any) {
+      // Fallback if migration hasn't been applied yet
+      if (error.message?.includes("default_address_id")) {
+        const [profRes, addrRes] = await Promise.all([
+          supabase.from("profiles").select(
+            "address_line1, address_line2, city, region, postal_code, country, lat, lng",
+          ).eq("id", user.id).maybeSingle(),
+          supabase.from("addresses").select("*").eq("user_id", user.id).order("created_at"),
+        ]);
+        if (profRes.data) setWorkerAddr(profRes.data as Partial<AddressData>);
+        setAddresses((addrRes.data ?? []) as SavedAddress[]);
+        console.warn("Migration not yet applied: default_address_id column unavailable. Please run migrations.");
+      } else {
+        throw error;
+      }
+    }
     setLoading(false);
   }, [user]);
 
@@ -144,9 +173,27 @@ const ProfilePage = () => {
   };
 
   const setDefault = async (id: string) => {
-    const { error } = await supabase.from("addresses").update({ is_default: true }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    load();
+    if (!user) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ default_address_id: id })
+        .eq("id", user.id);
+      if (error) {
+        // If migration not applied yet, show info message
+        if (error.message?.includes("default_address_id")) {
+          toast.error("Feature not yet available. Please wait for database update.");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+      toast.success("Default address updated.");
+      load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -195,15 +242,15 @@ const ProfilePage = () => {
                 <Card key={a.id} className="p-5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold">{a.label}</h3>
-                        {a.is_default && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Star className="h-3 w-3" /> Default
-                          </Badge>
-                        )}
-                      </div>
+                       <div className="flex items-center gap-2">
+                         <MapPin className="h-4 w-4 text-primary" />
+                         <h3 className="font-semibold">{a.label}</h3>
+                         {defaultAddressId === a.id && (
+                           <Badge variant="secondary" className="gap-1">
+                             <Star className="h-3 w-3" /> Default
+                           </Badge>
+                         )}
+                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         {a.address_line1}
                         {a.address_line2 ? `, ${a.address_line2}` : ""}<br />
@@ -213,8 +260,8 @@ const ProfilePage = () => {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {!a.is_default && (
-                      <Button size="sm" variant="outline" onClick={() => setDefault(a.id)}>
+                    {defaultAddressId !== a.id && (
+                      <Button size="sm" variant="outline" onClick={() => setDefault(a.id)} disabled={saving}>
                         <Star className="h-4 w-4" /> Make default
                       </Button>
                     )}

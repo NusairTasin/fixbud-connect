@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, Star, ChevronDown } from "lucide-react";
+import { toast } from "sonner";
 
 interface Category {
   id: string;
@@ -35,6 +36,7 @@ interface Job {
   category_id: string;
   created_at: string;
   shared_address_id: string | null;
+  address_changed: boolean;
   shared_address: {
     label: string;
     address_line1: string;
@@ -58,26 +60,89 @@ const CustomerDashboard = () => {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [catsRes, jobsRes, reviewsRes] = await Promise.all([
-      supabase.from("service_categories").select("*").order("name"),
-      supabase
-        .from("job_requests")
-        .select(
-          "*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name), shared_address:addresses(label, address_line1, city, country), bid_count:bids(count)",
-        )
-        .eq("customer_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase.from("reviews").select("job_id").eq("customer_id", user.id),
-    ]);
-    setCategories(catsRes.data ?? []);
-    setJobs((jobsRes.data ?? []) as unknown as Job[]);
-    setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
-    setLoading(false);
+    try {
+      const [catsRes, jobsRes, reviewsRes] = await Promise.all([
+        supabase.from("service_categories").select("*").order("name"),
+        supabase
+          .from("job_requests")
+          .select(
+            "*, service_categories(name), worker:profiles!job_requests_worker_id_fkey(id, name), shared_address:addresses!job_requests_shared_address_id_fkey(label, address_line1, city, country), bid_count:bids(count)",
+          )
+          .eq("customer_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase.from("reviews").select("job_id").eq("customer_id", user.id),
+      ]);
+      if (jobsRes.error) throw jobsRes.error;
+      if (catsRes.error) throw catsRes.error;
+      setCategories(catsRes.data ?? []);
+      setJobs((jobsRes.data ?? []) as unknown as Job[]);
+      setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
+    } catch (err: any) {
+      // If the rich query fails (e.g. migration not applied), fall back to a simple job fetch
+      console.error("Failed to load jobs with extended query:", err);
+      toast.error?.("Unable to load extended job details; showing basic job list.");
+      try {
+        const [catsRes, jobsRes, reviewsRes] = await Promise.all([
+          supabase.from("service_categories").select("*").order("name"),
+          supabase
+            .from("job_requests")
+            .select("*")
+            .eq("customer_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase.from("reviews").select("job_id").eq("customer_id", user.id),
+        ]);
+        setCategories(catsRes.data ?? []);
+        setJobs(((jobsRes.data ?? []) as any[]).map((r) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          status: r.status,
+          budget: r.budget,
+          worker_id: r.worker_id ?? null,
+          category_id: r.category_id,
+          created_at: r.created_at,
+          shared_address_id: r.shared_address_id ?? null,
+          address_changed: (r.address_changed as boolean) ?? false,
+          shared_address: null,
+          service_categories: null,
+          worker: r.worker_id ? { id: r.worker_id, name: "" } : null,
+        })) as unknown as Job[]);
+        setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
+      } catch (err2: any) {
+        console.error("Fallback job load failed:", err2);
+        setCategories([]);
+        setJobs([]);
+        setReviewedJobIds(new Set());
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Realtime: re-fetch whenever job_requests or bids change for this customer
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`customer-dashboard-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_requests", filter: `customer_id=eq.${user.id}` },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bids" },
+        () => load(),
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
 
   const handleCancel = async (jobId: string) => {
     const { error } = await supabase
@@ -180,13 +245,14 @@ const CustomerDashboard = () => {
                       {j.status === "completed" && reviewedJobIds.has(j.id) && (
                         <span className="text-xs text-muted-foreground">Reviewed ✓</span>
                       )}
-                      {(j.status === "accepted" || j.status === "completed") && (
-                        <ShareAddressDialog
-                          jobId={j.id}
-                          currentAddressId={j.shared_address_id}
-                          onShared={load}
-                        />
-                      )}
+                       {(j.status === "accepted" || j.status === "completed") && (
+                          <ShareAddressDialog
+                            jobId={j.id}
+                            currentAddressId={j.shared_address_id}
+                            addressChanged={j.address_changed ?? false}
+                            onShared={load}
+                          />
+                        )}
                       {(j.status === "pending" || j.status === "accepted") && (
                         <Button
                           variant="outline"

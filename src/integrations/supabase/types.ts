@@ -123,12 +123,14 @@ export type Database = {
       }
       job_requests: {
         Row: {
+          address_changed: boolean
           budget: number
           category_id: string
           created_at: string
           customer_id: string
           description: string
           id: string
+          original_shared_address_id: string | null
           shared_address_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
@@ -136,12 +138,14 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
+          address_changed?: boolean
           budget: number
           category_id: string
           created_at?: string
           customer_id: string
           description: string
           id?: string
+          original_shared_address_id?: string | null
           shared_address_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title: string
@@ -149,12 +153,14 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
+          address_changed?: boolean
           budget?: number
           category_id?: string
           created_at?: string
           customer_id?: string
           description?: string
           id?: string
+          original_shared_address_id?: string | null
           shared_address_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title?: string
@@ -200,6 +206,7 @@ export type Database = {
           city: string | null
           country: string | null
           created_at: string
+          default_address_id: string | null
           email: string
           id: string
           lat: number | null
@@ -216,6 +223,7 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          default_address_id?: string | null
           email: string
           id: string
           lat?: number | null
@@ -232,6 +240,7 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          default_address_id?: string | null
           email?: string
           id?: string
           lat?: number | null

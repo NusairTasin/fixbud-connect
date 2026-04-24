@@ -36,7 +36,7 @@ interface Props {
 }
 
 export const PostJobDialog = ({ defaultCategoryId, trigger, onCreated }: Props) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [title, setTitle] = useState("");
@@ -68,6 +68,10 @@ export const PostJobDialog = ({ defaultCategoryId, trigger, onCreated }: Props) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (role !== "customer") {
+      toast.error("Only customers can post jobs. Switch to a customer account.");
+      return;
+    }
     if (!categoryId) {
       toast.error("Please choose a category.");
       return;
@@ -87,7 +91,11 @@ export const PostJobDialog = ({ defaultCategoryId, trigger, onCreated }: Props) 
     });
     setSubmitting(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(
+        error.message.includes("row-level security")
+          ? "Not allowed to create jobs (RLS). Make sure your account has the 'customer' role."
+          : error.message,
+      );
       return;
     }
     toast.success("Job posted!");

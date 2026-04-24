@@ -21,11 +21,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchRole = async (userId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
       .maybeSingle();
+    if (error) {
+      setRole(null);
+      return;
+    }
     setRole((data?.role as AppRole) ?? null);
   };
 
@@ -35,10 +39,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
+        setLoading(true);
         // Defer Supabase calls to avoid deadlocks
-        setTimeout(() => fetchRole(newSession.user.id), 0);
+        setTimeout(() => {
+          fetchRole(newSession.user.id).finally(() => setLoading(false));
+        }, 0);
       } else {
         setRole(null);
+        setLoading(false);
       }
     });
 

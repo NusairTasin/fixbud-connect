@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Hammer, Star, ArrowLeft, Loader2, MapPin } from "lucide-react";
+import { Hammer, Star, ArrowLeft, Loader2, MapPin, LayoutDashboard } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -73,12 +73,20 @@ const WorkerProfile = () => {
             </div>
             <span className="text-lg font-bold">FixBud</span>
           </Link>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/dashboard/customer">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/dashboard">
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/dashboard/customer">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 

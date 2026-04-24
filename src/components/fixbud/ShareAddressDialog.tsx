@@ -31,10 +31,11 @@ interface SavedAddress {
 interface Props {
   jobId: string;
   currentAddressId: string | null;
+  addressChanged: boolean;
   onShared?: () => void;
 }
 
-export const ShareAddressDialog = ({ jobId, currentAddressId, onShared }: Props) => {
+export const ShareAddressDialog = ({ jobId, currentAddressId, addressChanged, onShared }: Props) => {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -74,21 +75,27 @@ export const ShareAddressDialog = ({ jobId, currentAddressId, onShared }: Props)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant={currentAddressId ? "outline" : "default"}>
+        <Button size="sm" variant={currentAddressId ? "outline" : "default"} disabled={addressChanged}>
           <MapPin className="h-4 w-4" />
-          {currentAddressId ? "Change address" : "Share address"}
+          {currentAddressId ? (addressChanged ? "Address changed" : "Change address") : "Share address"}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Share address with the worker</DialogTitle>
           <DialogDescription>
-            Pick which of your saved addresses to send. Only the assigned worker can see it.
+            {addressChanged 
+              ? "You've already changed the address once. No further changes are allowed."
+              : "Pick which of your saved addresses to send. Only the assigned worker can see it."}
           </DialogDescription>
         </DialogHeader>
         {loading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : addressChanged ? (
+          <div className="rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">
+            <p>You have already changed the address once after the offer was accepted. No further changes are allowed.</p>
           </div>
         ) : addresses.length === 0 ? (
           <div className="rounded-md bg-muted/40 p-4 text-sm">
@@ -116,9 +123,9 @@ export const ShareAddressDialog = ({ jobId, currentAddressId, onShared }: Props)
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleShare} disabled={saving || !selected || addresses.length === 0}>
+          <Button onClick={handleShare} disabled={saving || !selected || addresses.length === 0 || addressChanged}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Share
+            {currentAddressId && !addressChanged ? "Update address" : "Share"}
           </Button>
         </DialogFooter>
       </DialogContent>
