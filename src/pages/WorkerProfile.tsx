@@ -3,12 +3,16 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Hammer, Star, ArrowLeft, Loader2 } from "lucide-react";
+import { Hammer, Star, ArrowLeft, Loader2, MapPin } from "lucide-react";
 
 interface Profile {
   id: string;
   name: string;
   average_rating: number;
+  address_line1: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
 }
 
 interface Review {
@@ -42,7 +46,11 @@ const WorkerProfile = () => {
     if (!id) return;
     (async () => {
       const [profRes, revRes] = await Promise.all([
-        supabase.from("profiles").select("id, name, average_rating").eq("id", id).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("id, name, average_rating, address_line1, city, region, country")
+          .eq("id", id)
+          .maybeSingle(),
         supabase
           .from("reviews")
           .select("id, rating, comment, created_at, customer:profiles!reviews_customer_id_fkey(name)")
@@ -97,6 +105,12 @@ const WorkerProfile = () => {
                       {reviews.length === 1 ? "" : "s"}
                     </span>
                   </div>
+                  {profile.city && (
+                    <p className="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      {[profile.city, profile.region, profile.country].filter(Boolean).join(", ")}
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
