@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Hammer, LogOut } from "lucide-react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Hammer, LogOut, User, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -31,13 +31,27 @@ export const DashboardShell = ({ title, subtitle, children }: Props) => {
               {role}
             </span>
           </Link>
-          <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-1">
+            {role === "customer" && (
+              <Button variant="ghost" size="sm" asChild>
+                <NavLink to="/map">
+                  <MapIcon className="h-4 w-4" />
+                  Map
+                </NavLink>
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" asChild>
+              <NavLink to="/profile">
+                <User className="h-4 w-4" />
+                Profile
+              </NavLink>
+            </Button>
             <span className="hidden text-sm text-muted-foreground sm:inline">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4" />
               Sign out
             </Button>
-          </div>
+          </nav>
         </div>
       </header>
       <main className="container mx-auto px-6 py-10">
