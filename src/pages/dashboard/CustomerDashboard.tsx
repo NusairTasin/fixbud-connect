@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, Star, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { PhoneContact } from "@/components/fixbud/PhoneContact";
 
 interface Category {
   id: string;
@@ -46,6 +47,7 @@ interface Job {
   service_categories: { name: string } | null;
   worker: { id: string; name: string } | null;
   bid_count?: { count: number }[];
+  workerPhone?: string | null;
 }
 
 const CustomerDashboard = () => {
@@ -77,6 +79,23 @@ const CustomerDashboard = () => {
       setCategories(catsRes.data ?? []);
       setJobs((jobsRes.data ?? []) as unknown as Job[]);
       setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
+      // Fetch worker phone for accepted/completed jobs
+      const loadedJobs = (jobsRes.data ?? []) as unknown as Job[];
+      const jobsWithPhone = await Promise.all(
+        loadedJobs.map(async (j) => {
+          if ((j.status === "accepted" || j.status === "completed") && j.worker_id) {
+            try {
+              const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.worker_id });
+              return { ...j, workerPhone: (data as string | null) ?? null };
+            } catch (phoneErr) {
+              console.error("Failed to fetch worker phone for job", j.id, phoneErr);
+              return { ...j, workerPhone: null };
+            }
+          }
+          return j;
+        }),
+      );
+      setJobs(jobsWithPhone as unknown as Job[]);
     } catch (err: any) {
       // If the rich query fails (e.g. migration not applied), fall back to a simple job fetch
       console.error("Failed to load jobs with extended query:", err);
@@ -92,7 +111,7 @@ const CustomerDashboard = () => {
           supabase.from("reviews").select("job_id").eq("customer_id", user.id),
         ]);
         setCategories(catsRes.data ?? []);
-        setJobs(((jobsRes.data ?? []) as any[]).map((r) => ({
+        const fallbackJobs = ((jobsRes.data ?? []) as any[]).map((r) => ({
           id: r.id,
           title: r.title,
           description: r.description,
@@ -106,7 +125,22 @@ const CustomerDashboard = () => {
           shared_address: null,
           service_categories: null,
           worker: r.worker_id ? { id: r.worker_id, name: "" } : null,
-        })) as unknown as Job[]);
+        })) as unknown as Job[];
+        const fallbackWithPhone = await Promise.all(
+          fallbackJobs.map(async (j) => {
+            if ((j.status === "accepted" || j.status === "completed") && j.worker_id) {
+              try {
+                const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.worker_id });
+                return { ...j, workerPhone: (data as string | null) ?? null };
+              } catch (phoneErr) {
+                console.error("Failed to fetch worker phone for job", j.id, phoneErr);
+                return { ...j, workerPhone: null };
+              }
+            }
+            return j;
+          }),
+        );
+        setJobs(fallbackWithPhone as unknown as Job[]);
         setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
       } catch (err2: any) {
         console.error("Fallback job load failed:", err2);
@@ -233,6 +267,11 @@ const CustomerDashboard = () => {
                           </>
                         )}
                       </p>
+                      {(j.status === "accepted" || j.status === "completed") && j.worker && (
+                        <div className="mt-1">
+                          <PhoneContact phone={j.workerPhone ?? null} />
+                        </div>
+                      )}
                       <p className="mt-2 text-sm">{j.description}</p>
                     </div>
                     <div className="flex flex-col gap-2">

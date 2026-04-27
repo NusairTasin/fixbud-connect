@@ -212,6 +212,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           name: string
+          phone: string
           postal_code: string | null
           region: string | null
           updated_at: string
@@ -229,6 +230,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name: string
+          phone: string
           postal_code?: string | null
           region?: string | null
           updated_at?: string
@@ -246,6 +248,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name?: string
+          phone?: string | null
           postal_code?: string | null
           region?: string | null
           updated_at?: string

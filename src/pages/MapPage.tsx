@@ -37,7 +37,12 @@ interface Worker {
   id: string;
   name: string;
   average_rating: number;
+  address_line1: string | null;
+  address_line2: string | null;
   city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country: string | null;
   lat: number;
   lng: number;
 }
@@ -72,21 +77,16 @@ const MapPage = () => {
     (async () => {
       if (!user) return;
       // Workers with coordinates — RLS allows authenticated users to see profiles
-      const [workerRoles, addrRes] = await Promise.all([
-        supabase.from("user_roles").select("user_id").eq("role", "worker"),
+      const [workerRes, addrRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, name, average_rating, address_line1, address_line2, city, region, postal_code, country, lat, lng")
+          .not("lat", "is", null)
+          .not("lng", "is", null),
         supabase.from("addresses").select("id, label, lat, lng, is_default").eq("user_id", user.id),
       ]);
-      const ids = (workerRoles.data ?? []).map((r) => r.user_id);
-      let workerList: Worker[] = [];
-      if (ids.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, name, average_rating, city, lat, lng")
-          .in("id", ids)
-          .not("lat", "is", null)
-          .not("lng", "is", null);
-        workerList = (data ?? []).filter((p): p is Worker => p.lat != null && p.lng != null);
-      }
+
+      const workerList = (workerRes.data ?? []).filter((p): p is Worker => p.lat != null && p.lng != null);
       setWorkers(workerList);
 
       const addrs = (addrRes.data ?? []) as SavedAddress[];
@@ -202,7 +202,9 @@ const MapPage = () => {
                     <Link to={`/workers/${w.id}`} className="font-semibold text-primary hover:underline">
                       {w.name}
                     </Link>
-                    {w.city && <div className="text-xs text-muted-foreground">{w.city}</div>}
+                    <div className="text-xs text-muted-foreground">
+                      {[w.address_line1, w.address_line2, w.city, w.region, w.postal_code, w.country].filter(Boolean).join(", ")}
+                    </div>
                     <div className="flex items-center gap-1 text-xs">
                       <Star className="h-3 w-3 fill-current text-primary" />
                       {Number(w.average_rating).toFixed(2)}

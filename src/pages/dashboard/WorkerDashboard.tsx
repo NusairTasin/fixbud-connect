@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, Search, X, MapPin, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { PhoneContact } from "@/components/fixbud/PhoneContact";
 
 interface Job {
   id: string;
@@ -42,6 +43,7 @@ interface Job {
     postal_code: string | null;
     country: string;
   } | null;
+  customerPhone?: string | null;
 }
 
 interface Category {
@@ -97,11 +99,23 @@ const WorkerDashboard = () => {
       });
       setMyBids(bidsMap);
       setAvailable(all.filter((j) => j.status === "pending" && !j.worker_id));
-      setActive(
-        all.filter(
-          (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
-        ),
+      const activeJobs = all.filter(
+        (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
       );
+      // Fetch customer phone for accepted jobs
+      const activeWithPhone = await Promise.all(
+        activeJobs.map(async (j) => {
+          if (j.status !== "accepted") return j;
+          try {
+            const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.customer_id });
+            return { ...j, customerPhone: (data as string | null) ?? null };
+          } catch (phoneErr) {
+            console.error("Failed to fetch customer phone for job", j.id, phoneErr);
+            return { ...j, customerPhone: null };
+          }
+        }),
+      );
+      setActive(activeWithPhone);
     } catch (err: any) {
       console.error("WorkerDashboard rich query failed:", err);
       toast.error(err?.message ?? "Unable to load jobs. Please try again.");
@@ -136,11 +150,22 @@ const WorkerDashboard = () => {
           shared_address: null,
         }));
         setAvailable(mapped.filter((j) => j.status === "pending" && !j.worker_id));
-        setActive(
-          mapped.filter(
-            (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
-          ),
+        const activeJobsFallback = mapped.filter(
+          (j) => j.worker_id === user.id && (j.status === "accepted" || j.status === "completed"),
         );
+        const activeWithPhoneFallback = await Promise.all(
+          activeJobsFallback.map(async (j) => {
+            if (j.status !== "accepted") return j;
+            try {
+              const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.customer_id });
+              return { ...j, customerPhone: (data as string | null) ?? null };
+            } catch (phoneErr) {
+              console.error("Failed to fetch customer phone for job", j.id, phoneErr);
+              return { ...j, customerPhone: null };
+            }
+          }),
+        );
+        setActive(activeWithPhoneFallback);
       } catch (err2: any) {
         console.error("WorkerDashboard fallback query failed:", err2);
         setCategories([]);
@@ -303,6 +328,11 @@ const WorkerDashboard = () => {
                 <span className="text-muted-foreground">
                   Waiting for the customer to share their address…
                 </span>
+              )}
+              {j.status === "accepted" && (
+                <div className="mt-2">
+                  <PhoneContact phone={j.customerPhone ?? null} />
+                </div>
               )}
             </div>
           )}

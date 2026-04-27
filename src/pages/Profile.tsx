@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, Plus, Trash2, Pencil, Star } from "lucide-react";
+import { PhoneSection } from "@/components/fixbud/PhoneSection";
+import { NameSection } from "@/components/fixbud/NameSection";
 import { toast } from "sonner";
 
 interface SavedAddress {
@@ -203,25 +205,39 @@ const ProfilePage = () => {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : role === "worker" ? (
-        <Card className="p-6">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold">Service location</h2>
-            <p className="text-sm text-muted-foreground">
-              Required to place bids. Customers will see your pin on the map.
-            </p>
-          </div>
-          <AddressPicker value={workerAddr} onChange={setWorkerAddr} />
-          <div className="mt-4 flex justify-end">
-            <Button onClick={saveWorkerAddress} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save location
-            </Button>
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Contact information</h2>
+            {user && <NameSection userId={user.id} />}
+            {user && <PhoneSection userId={user.id} />}
+          </Card>
+          <Card className="p-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold">Service location</h2>
+              <p className="text-sm text-muted-foreground">
+                Required to place bids. Customers will see your pin on the map.
+              </p>
+            </div>
+            <AddressPicker value={workerAddr} onChange={setWorkerAddr} />
+            <div className="mt-4 flex justify-end">
+              <Button onClick={saveWorkerAddress} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save location
+              </Button>
+            </div>
+          </Card>
+        </div>
       ) : (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Contact information</h2>
+            {user && <NameSection userId={user.id} />}
+            {user && <PhoneSection userId={user.id} />}
+          </Card>
+
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
               <h2 className="text-xl font-semibold">Saved addresses</h2>
               <p className="text-sm text-muted-foreground">
                 Pick one to share with a worker after they're hired.
@@ -276,7 +292,8 @@ const ProfilePage = () => {
               ))}
             </div>
           )}
-        </section>
+          </section>
+        </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

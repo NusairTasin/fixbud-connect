@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Hammer, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, AppRole } from "@/hooks/useAuth";
+import { isValidBDPhone, normaliseBDPhone } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,8 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [signupRole, setSignupRole] = useState<AppRole>("customer");
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -42,18 +45,39 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate phone
+    if (!phone.trim()) {
+      setPhoneError("Phone number is required");
+      return;
+    }
+    if (!isValidBDPhone(phone)) {
+      setPhoneError("Enter a valid Bangladeshi mobile number (e.g. 01712345678)");
+      return;
+    }
+    setPhoneError("");
+    const normalisedPhone = normaliseBDPhone(phone);
+
     setSubmitting(true);
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { name, role: signupRole },
+        data: { name, role: signupRole, phone: normalisedPhone },
       },
     });
     setSubmitting(false);
     if (error) {
-      toast.error(error.message);
+      const msg = error.message ?? "";
+      const isDuplicatePhone =
+        (msg.toLowerCase().includes("phone") && msg.toLowerCase().includes("unique")) ||
+        ("code" in error && (error as { code?: string }).code === "23505");
+      if (isDuplicatePhone) {
+        setPhoneError("This phone number is already registered. Please sign in or use a different number.");
+      } else {
+        toast.error(msg);
+      }
       return;
     }
     toast.success("Check your email to confirm your account.");
@@ -160,6 +184,19 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-phone">Phone number</Label>
+                  <Input
+                    id="signup-phone"
+                    type="tel"
+                    required
+                    placeholder="01XXXXXXXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
+                  />
+                  {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-pass">Password</Label>

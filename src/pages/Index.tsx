@@ -261,7 +261,6 @@ const Index = () => {
       <footer className="border-t border-border py-8">
         <div className="container mx-auto flex flex-col items-center justify-between gap-3 px-6 text-sm text-muted-foreground md:flex-row">
           <p>© {new Date().getFullYear()} FixBud. All rights reserved.</p>
-          <p>Phase 1 • Auth coming next</p>
         </div>
       </footer>
     </main>
