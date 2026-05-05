@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, Search, X, MapPin, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneContact } from "@/components/fixbud/PhoneContact";
+import { NegotiationThread } from "@/components/fixbud/NegotiationThread";
 
 interface Job {
   id: string;
@@ -52,6 +53,7 @@ interface Category {
 }
 
 interface MyBid {
+  id: string;
   job_id: string;
   amount: number;
   status: "pending" | "accepted" | "rejected" | "withdrawn";
@@ -85,7 +87,7 @@ const WorkerDashboard = () => {
           )
           .order("created_at", { ascending: false }),
         supabase.from("service_categories").select("id, name").order("name"),
-        supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
+        supabase.from("bids").select("id, job_id, amount, status").eq("worker_id", user.id),
         supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
       ]);
       if (jobsRes.error) throw jobsRes.error;
@@ -123,7 +125,7 @@ const WorkerDashboard = () => {
         const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
           supabase.from("job_requests").select("*").order("created_at", { ascending: false }),
           supabase.from("service_categories").select("id, name").order("name"),
-          supabase.from("bids").select("job_id, amount, status").eq("worker_id", user.id),
+          supabase.from("bids").select("id, job_id, amount, status").eq("worker_id", user.id),
           supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
         ]);
         if (jobsRes.error) throw jobsRes.error;
@@ -197,6 +199,11 @@ const WorkerDashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bids", filter: `worker_id=eq.${user.id}` },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bid_offers" },
         () => load(),
       )
       .subscribe();
@@ -338,11 +345,18 @@ const WorkerDashboard = () => {
           )}
         </div>
         <div className="flex flex-col gap-2">
-          {mode === "browse" &&
-            (myBids[j.id] ? (
-              <Button size="sm" variant="outline" disabled>
-                Bid placed
-              </Button>
+          {mode === "browse" && (
+            myBids[j.id] ? (
+              <div className="w-full">
+                <NegotiationThread
+                  bidId={myBids[j.id].id}
+                  workerId={user!.id}
+                  workerName=""
+                  jobId={j.id}
+                  viewerRole="worker"
+                  onResolved={load}
+                />
+              </div>
             ) : hasLocation ? (
               <>
                 <Button size="sm" onClick={() => handleAcceptAtBudget(j.id)}>
@@ -365,7 +379,8 @@ const WorkerDashboard = () => {
               <Button size="sm" variant="outline" asChild>
                 <Link to="/profile">Add location to accept/bid</Link>
               </Button>
-            ))}
+            )
+          )}
           {mode === "active" && j.status === "accepted" && (
             <Button size="sm" onClick={() => handleComplete(j.id)}>
               <CheckCircle2 className="h-4 w-4" />

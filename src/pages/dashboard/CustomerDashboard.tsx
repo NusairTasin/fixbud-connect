@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/fixbud/DashboardShell";
 import { PostJobDialog } from "@/components/fixbud/PostJobDialog";
 import { ReviewDialog } from "@/components/fixbud/ReviewDialog";
 import { StatusBadge } from "@/components/fixbud/StatusBadge";
-import { BidsList } from "@/components/fixbud/BidsList";
+import { NegotiationThread } from "@/components/fixbud/NegotiationThread";
 import { ShareAddressDialog } from "@/components/fixbud/ShareAddressDialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,13 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, Star, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneContact } from "@/components/fixbud/PhoneContact";
+
+interface ThreadBid {
+  id: string;
+  worker_id: string;
+  status: string;
+  worker: { id: string; name: string } | null;
+}
 
 interface Category {
   id: string;
@@ -58,6 +65,7 @@ const CustomerDashboard = () => {
   const [defaultCat, setDefaultCat] = useState<string | undefined>();
   const [reviewedJobIds, setReviewedJobIds] = useState<Set<string>>(new Set());
   const [reviewing, setReviewing] = useState<Job | null>(null);
+  const [jobThreads, setJobThreads] = useState<Record<string, ThreadBid[]>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -96,6 +104,20 @@ const CustomerDashboard = () => {
         }),
       );
       setJobs(jobsWithPhone as unknown as Job[]);
+      // Fetch threads for pending jobs
+      const pendingJobs = (jobsWithPhone as unknown as Job[]).filter(j => j.status === 'pending');
+      const threadsMap: Record<string, ThreadBid[]> = {};
+      await Promise.all(
+        pendingJobs.map(async (j) => {
+          const { data } = await supabase
+            .from('bids')
+            .select('id, worker_id, status, worker:profiles!bids_worker_id_fkey(id, name)')
+            .eq('job_id', j.id)
+            .neq('status', 'withdrawn');
+          threadsMap[j.id] = (data ?? []) as unknown as ThreadBid[];
+        })
+      );
+      setJobThreads(threadsMap);
     } catch (err: any) {
       // If the rich query fails (e.g. migration not applied), fall back to a simple job fetch
       console.error("Failed to load jobs with extended query:", err);
@@ -171,6 +193,11 @@ const CustomerDashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bids" },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bid_offers" },
         () => load(),
       )
       .subscribe();
@@ -322,7 +349,33 @@ const CustomerDashboard = () => {
                         </Button>
                       </CollapsibleTrigger>
                       <CollapsibleContent className="mt-3">
-                        <BidsList jobId={j.id} canAccept onAccepted={load} />
+                        {(jobThreads[j.id] ?? []).length === 0 ? (
+                          <p className="rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                            No bids yet.
+                          </p>
+                        ) : (
+                          <div className="space-y-4">
+                            {(jobThreads[j.id] ?? []).map((thread) => (
+                              <div key={thread.id} className="rounded-md border bg-card/50 p-3">
+                                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                                  {thread.worker && (
+                                    <Link to={`/workers/${thread.worker.id}`} className="text-primary hover:underline">
+                                      {thread.worker.name}
+                                    </Link>
+                                  )}
+                                </div>
+                                <NegotiationThread
+                                  bidId={thread.id}
+                                  workerId={thread.worker_id}
+                                  workerName={thread.worker?.name ?? "Worker"}
+                                  jobId={j.id}
+                                  viewerRole="customer"
+                                  onResolved={load}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </CollapsibleContent>
                     </Collapsible>
                   )}

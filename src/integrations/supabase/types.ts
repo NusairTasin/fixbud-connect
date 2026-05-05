@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      bid_offers: {
+        Row: {
+          id: string
+          bid_id: string
+          round_number: number
+          proposer_role: Database["public"]["Enums"]["proposer_role"]
+          amount: number
+          message: string | null
+          status: Database["public"]["Enums"]["offer_status"]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          bid_id: string
+          round_number: number
+          proposer_role: Database["public"]["Enums"]["proposer_role"]
+          amount: number
+          message?: string | null
+          status?: Database["public"]["Enums"]["offer_status"]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          bid_id?: string
+          round_number?: number
+          proposer_role?: Database["public"]["Enums"]["proposer_role"]
+          amount?: number
+          message?: string | null
+          status?: Database["public"]["Enums"]["offer_status"]
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bid_offers_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "bids"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       addresses: {
         Row: {
           address_line1: string
@@ -375,6 +416,8 @@ export type Database = {
       app_role: "customer" | "worker"
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"
       job_status: "pending" | "accepted" | "completed" | "cancelled"
+      offer_status: "pending" | "countered" | "accepted" | "withdrawn" | "rejected"
+      proposer_role: "customer" | "worker"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -505,6 +548,31 @@ export const Constants = {
       app_role: ["customer", "worker"],
       bid_status: ["pending", "accepted", "rejected", "withdrawn"],
       job_status: ["pending", "accepted", "completed", "cancelled"],
+      offer_status: ["pending", "countered", "accepted", "withdrawn", "rejected"],
+      proposer_role: ["customer", "worker"],
     },
   },
 } as const
+
+export type OfferStatus = "pending" | "countered" | "accepted" | "withdrawn" | "rejected";
+export type ProposerRole = "customer" | "worker";
+
+export interface BidOffer {
+  id: string;
+  bid_id: string;
+  round_number: number;
+  proposer_role: ProposerRole;
+  amount: number;
+  message: string | null;
+  status: OfferStatus;
+  created_at: string;
+}
+
+export interface NegotiationThread {
+  bid_id: string;
+  job_id: string;
+  worker_id: string;
+  worker_name: string;
+  bid_status: string;
+  offers: BidOffer[];
+}

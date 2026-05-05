@@ -41,11 +41,10 @@ export const BidDialog = ({ jobId, jobTitle, suggested, onPlaced, trigger }: Pro
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from("bids").insert({
-      job_id: jobId,
-      worker_id: user.id,
-      amount: value,
-      message: message.trim() || null,
+    const { error } = await supabase.rpc("negotiate_initiate", {
+      p_job_id: jobId,
+      p_amount: value,
+      p_message: message.trim() || null,
     });
     setSubmitting(false);
     if (error) {
