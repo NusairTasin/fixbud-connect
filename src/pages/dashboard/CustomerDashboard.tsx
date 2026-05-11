@@ -403,8 +403,9 @@ const CustomerDashboard = () => {
           open={!!reviewing}
           onOpenChange={(o) => !o && setReviewing(null)}
           jobId={reviewing.id}
-          workerId={reviewing.worker.id}
-          workerName={reviewing.worker.name}
+          revieweeId={reviewing.worker.id}
+          revieweeName={reviewing.worker.name}
+          reviewerRole="customer"
           onSubmitted={() => {
             setReviewing(null);
             load();

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { DashboardShell } from "@/components/fixbud/DashboardShell";
 import { StatusBadge } from "@/components/fixbud/StatusBadge";
 import { BidDialog } from "@/components/fixbud/BidDialog";
+import { ReviewDialog } from "@/components/fixbud/ReviewDialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Search, X, MapPin, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, Search, X, MapPin, AlertTriangle, Star } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneContact } from "@/components/fixbud/PhoneContact";
 import { NegotiationThread } from "@/components/fixbud/NegotiationThread";
@@ -67,6 +68,8 @@ const WorkerDashboard = () => {
   const [myBids, setMyBids] = useState<Record<string, MyBid>>({});
   const [loading, setLoading] = useState(true);
   const [hasLocation, setHasLocation] = useState(true);
+  const [reviewedJobIds, setReviewedJobIds] = useState<Set<string>>(new Set());
+  const [reviewing, setReviewing] = useState<Job | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -79,7 +82,7 @@ const WorkerDashboard = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [jobsRes, catsRes, bidsRes, profRes] = await Promise.all([
+      const [jobsRes, catsRes, bidsRes, profRes, workerReviewsRes] = await Promise.all([
         supabase
           .from("job_requests")
           .select(
@@ -89,12 +92,14 @@ const WorkerDashboard = () => {
         supabase.from("service_categories").select("id, name").order("name"),
         supabase.from("bids").select("id, job_id, amount, status").eq("worker_id", user.id),
         supabase.from("profiles").select("lat, lng").eq("id", user.id).maybeSingle(),
+        (supabase as any).from("worker_reviews").select("job_id").eq("worker_id", user.id),
       ]);
       if (jobsRes.error) throw jobsRes.error;
       if (catsRes.error) throw catsRes.error;
       const all = (jobsRes.data ?? []) as unknown as Job[];
       setCategories(catsRes.data ?? []);
       setHasLocation(!!(profRes.data?.lat && profRes.data?.lng));
+      setReviewedJobIds(new Set((workerReviewsRes.data ?? []).map((r: { job_id: string }) => r.job_id)));
       const bidsMap: Record<string, MyBid> = {};
       (bidsRes.data ?? []).forEach((b) => {
         bidsMap[b.job_id] = b as MyBid;
@@ -311,7 +316,18 @@ const WorkerDashboard = () => {
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {j.service_categories?.name} • Budget ${j.budget.toLocaleString()}
-            {j.customer && ` • From ${j.customer.name}`}
+            {j.customer && (
+              <>
+                {" • From "}
+                {mode === "active" ? (
+                  <Link to={`/customers/${j.customer_id}`} className="text-primary hover:underline">
+                    {j.customer.name}
+                  </Link>
+                ) : (
+                  j.customer.name
+                )}
+              </>
+            )}
           </p>
           <p className="mt-2 text-sm">{j.description}</p>
           {mode === "active" && (
@@ -387,12 +403,22 @@ const WorkerDashboard = () => {
               Mark complete
             </Button>
           )}
+          {mode === "active" && j.status === "completed" && !reviewedJobIds.has(j.id) && (
+            <Button size="sm" onClick={() => setReviewing(j)}>
+              <Star className="h-4 w-4" />
+              Leave review
+            </Button>
+          )}
+          {mode === "active" && j.status === "completed" && reviewedJobIds.has(j.id) && (
+            <span className="text-xs text-muted-foreground">Reviewed ✓</span>
+          )}
         </div>
       </div>
     </Card>
   );
 
   return (
+    <>
     <DashboardShell title="Job board" subtitle="Browse open requests and manage your active work.">
       {!loading && !hasLocation && (
         <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-primary p-4">
@@ -524,7 +550,23 @@ const WorkerDashboard = () => {
         </Tabs>
       )}
     </DashboardShell>
+      {reviewing && reviewing.customer && (
+        <ReviewDialog
+          open={!!reviewing}
+          onOpenChange={(o) => !o && setReviewing(null)}
+          jobId={reviewing.id}
+          revieweeId={reviewing.customer_id}
+          revieweeName={reviewing.customer.name}
+          reviewerRole="worker"
+          onSubmitted={() => {
+            setReviewing(null);
+            load();
+          }}
+        />
+      )}
+    </>
   );
+
 };
 
 export default WorkerDashboard;

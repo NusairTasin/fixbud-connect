@@ -39,6 +39,65 @@ interface Profile {
   default_address_id: string | null;
 }
 
+interface ReviewItem {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  reviewer_name: string;
+}
+
+const Stars = ({ value }: { value: number }) => (
+  <div className="flex">
+    {[1, 2, 3, 4, 5].map((n) => (
+      <Star
+        key={n}
+        className={`h-4 w-4 ${
+          n <= Math.round(value) ? "fill-accent text-accent" : "text-muted-foreground/30"
+        }`}
+      />
+    ))}
+  </div>
+);
+
+const ReviewsSection = ({
+  reviews,
+  label,
+  emptyText,
+  reviewerLabel,
+}: {
+  reviews: ReviewItem[];
+  label: string;
+  emptyText: string;
+  reviewerLabel: string;
+}) => (
+  <section>
+    <h2 className="mb-4 text-xl font-semibold">{label}</h2>
+    {reviews.length === 0 ? (
+      <Card className="p-10 text-center text-muted-foreground">{emptyText}</Card>
+    ) : (
+      <div className="space-y-3">
+        {reviews.map((r) => (
+          <Card key={r.id} className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Stars value={r.rating} />
+                <span className="text-sm font-medium">
+                  {reviewerLabel}: {r.reviewer_name}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {new Date(r.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            {r.comment && <p className="mt-2 text-sm">{r.comment}</p>}
+          </Card>
+        ))}
+      </div>
+    )}
+  </section>
+);
+
 const ProfilePage = () => {
   const { user, role } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -50,6 +109,7 @@ const ProfilePage = () => {
   const [editing, setEditing] = useState<SavedAddress | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
   const [draft, setDraft] = useState<AddressData | null>(null);
+  const [myReviews, setMyReviews] = useState<ReviewItem[]>([]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -70,6 +130,39 @@ const ProfilePage = () => {
         setDefaultAddressId(default_address_id ?? null);
       }
       setAddresses((addrRes.data ?? []) as SavedAddress[]);
+
+      // Fetch reviews for this user based on their role
+      if (role === "worker") {
+        const { data: revData } = await supabase
+          .from("reviews")
+          .select("id, rating, comment, created_at, customer:profiles!reviews_customer_id_fkey(name)")
+          .eq("worker_id", user.id)
+          .order("created_at", { ascending: false });
+        setMyReviews(
+          ((revData ?? []) as any[]).map((r) => ({
+            id: r.id,
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.created_at,
+            reviewer_name: r.customer?.name ?? "Customer",
+          })),
+        );
+      } else {
+        const { data: revData } = await (supabase as any)
+          .from("worker_reviews")
+          .select("id, rating, comment, created_at, worker:profiles!worker_reviews_worker_id_fkey(name)")
+          .eq("customer_id", user.id)
+          .order("created_at", { ascending: false });
+        setMyReviews(
+          ((revData ?? []) as any[]).map((r) => ({
+            id: r.id,
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.created_at,
+            reviewer_name: r.worker?.name ?? "Worker",
+          })),
+        );
+      }
     } catch (error: any) {
       // Fallback if migration hasn't been applied yet
       if (error.message?.includes("default_address_id")) {
@@ -226,6 +319,12 @@ const ProfilePage = () => {
               </Button>
             </div>
           </Card>
+          <ReviewsSection
+            reviews={myReviews}
+            label="My reviews"
+            emptyText="No reviews yet. Complete a job to receive your first review."
+            reviewerLabel="Customer"
+          />
         </div>
       ) : (
         <div className="space-y-6">
@@ -293,6 +392,12 @@ const ProfilePage = () => {
             </div>
           )}
           </section>
+          <ReviewsSection
+            reviews={myReviews}
+            label="My reviews"
+            emptyText="No reviews yet. Complete a job to receive your first review."
+            reviewerLabel="Worker"
+          />
         </div>
       )}
 

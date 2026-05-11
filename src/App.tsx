@@ -11,6 +11,7 @@ import DashboardRouter from "./pages/DashboardRouter.tsx";
 import CustomerDashboard from "./pages/dashboard/CustomerDashboard.tsx";
 import WorkerDashboard from "./pages/dashboard/WorkerDashboard.tsx";
 import WorkerProfile from "./pages/WorkerProfile.tsx";
+import CustomerProfile from "./pages/CustomerProfile.tsx";
 import ProfilePage from "./pages/Profile.tsx";
 import MapPage from "./pages/MapPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -56,6 +57,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <WorkerProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/customers/:id"
+              element={
+                <ProtectedRoute>
+                  <CustomerProfile />
                 </ProtectedRoute>
               }
             />

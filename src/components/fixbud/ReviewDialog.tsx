@@ -15,12 +15,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
+/** "customer" = customer reviews worker (existing flow)
+ *  "worker"   = worker reviews customer (new flow) */
+type ReviewerRole = "customer" | "worker";
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   jobId: string;
-  workerId: string;
-  workerName: string;
+  /** The person being reviewed */
+  revieweeId: string;
+  revieweeName: string;
+  /** Who is leaving the review */
+  reviewerRole?: ReviewerRole;
   onSubmitted?: () => void;
 }
 
@@ -28,8 +35,9 @@ export const ReviewDialog = ({
   open,
   onOpenChange,
   jobId,
-  workerId,
-  workerName,
+  revieweeId,
+  revieweeName,
+  reviewerRole = "customer",
   onSubmitted,
 }: Props) => {
   const { user } = useAuth();
@@ -41,13 +49,29 @@ export const ReviewDialog = ({
     e.preventDefault();
     if (!user) return;
     setSubmitting(true);
-    const { error } = await supabase.from("reviews").insert({
-      job_id: jobId,
-      worker_id: workerId,
-      customer_id: user.id,
-      rating,
-      comment: comment.trim() || null,
-    });
+
+    let error: { message: string } | null = null;
+
+    if (reviewerRole === "customer") {
+      // Customer reviews worker → existing `reviews` table
+      ({ error } = await supabase.from("reviews").insert({
+        job_id: jobId,
+        worker_id: revieweeId,
+        customer_id: user.id,
+        rating,
+        comment: comment.trim() || null,
+      }));
+    } else {
+      // Worker reviews customer → new `worker_reviews` table
+      ({ error } = await (supabase as any).from("worker_reviews").insert({
+        job_id: jobId,
+        customer_id: revieweeId,
+        worker_id: user.id,
+        rating,
+        comment: comment.trim() || null,
+      }));
+    }
+
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
@@ -64,7 +88,7 @@ export const ReviewDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rate {workerName}</DialogTitle>
+          <DialogTitle>Rate {revieweeName}</DialogTitle>
           <DialogDescription>How did the job go?</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
