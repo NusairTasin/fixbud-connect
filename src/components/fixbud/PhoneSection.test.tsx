@@ -1,86 +1,88 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PhoneSection } from "./PhoneSection";
-import { vi } from "vitest";
+import { vi, beforeEach, afterEach, describe, it, expect } from "vitest";
 
-let phoneMockValue: string | null = "+8801712345678";
+// vi.mock is hoisted, so the mock object must also be hoisted via vi.hoisted
+// to be accessible inside the factory function.
+const { phoneMockRef, supabaseMock } = vi.hoisted(() => {
+  const phoneMockRef = { value: "01712345678" as string | null };
 
-function makeSupabaseMock() {
-  return {
-    from: vi.fn(function (table: string) {
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockImplementation(function (_, val) {
-          return this;
-        }),
-        maybeSingle: vi.fn(() => Promise.resolve({ data: { phone: phoneMockValue }, error: null })),
-        update: vi.fn(function (value) {
-          // handle normalization on "Save"
-          if (value && value.phone) phoneMockValue = value.phone;
-          return {
-            eq: vi.fn(() => Promise.resolve({ error: null })),
-          };
-        }),
-      };
-    }),
+  const supabaseMock = {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn(() =>
+        Promise.resolve({ data: { phone: phoneMockRef.value }, error: null }),
+      ),
+      update: vi.fn((value) => {
+        if (value?.phone) phoneMockRef.value = value.phone;
+        return { eq: vi.fn(() => Promise.resolve({ error: null })) };
+      }),
+    })),
   };
-}
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: makeSupabaseMock() }));
+  return { phoneMockRef, supabaseMock };
+});
 
+vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseMock }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-// --- Tests ---
 describe("PhoneSection", () => {
   beforeEach(() => {
-    phoneMockValue = "01712345678";
+    phoneMockRef.value = "01712345678";
+    vi.clearAllMocks();
   });
+
   afterEach(() => vi.clearAllMocks());
 
   it("renders the current phone for the user", async () => {
     render(<PhoneSection userId="user-123" />);
-    await waitFor(() => expect(screen.getByText("Mobile phone")).toBeInTheDocument());
-    expect(screen.getByText("01712345678")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("01712345678")).toBeInTheDocument(),
+    );
   });
 
   it("shows placeholder when phone is null", async () => {
-    const mod = await import("@/integrations/supabase/client");
-    mod.supabase.from = vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn(() => Promise.resolve({ data: { phone: null }, error: null })),
-      update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
-    }));
+    phoneMockRef.value = null;
     render(<PhoneSection userId="user-123" />);
-    await waitFor(() => expect(screen.getByText("Mobile phone")).toBeInTheDocument());
-    expect(screen.getByText(/No phone number set/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/No phone number set/)).toBeInTheDocument(),
+    );
   });
 
-   it("clicking Edit enters edit mode with input pre-filled", async () => {
-    phoneMockValue = "01712345678"; // Ensure state
+  it("clicking Edit enters edit mode with input pre-filled", async () => {
     render(<PhoneSection userId="user-123" />);
-    await waitFor(() => expect(screen.getByText("01712345678")).toBeInTheDocument()); // ensure phone has loaded
-    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() =>
+      expect(screen.getByText("01712345678")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("Edit phone"));
     const input = await screen.findByTestId("phone-input");
-    expect(input).toHaveValue("01712345678"); // It should match mock DB value before normalization
+    expect(input).toHaveValue("01712345678");
   });
 
   it("shows error for invalid phone and blocks save", async () => {
     render(<PhoneSection userId="user-123" />);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText("Edit phone")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("Edit phone"));
     const input = screen.getByTestId("phone-input");
     fireEvent.change(input, { target: { value: "01799" } });
     fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(screen.getByTestId("inline-error")).toHaveTextContent("Invalid Bangladeshi phone number."));
+    await waitFor(() =>
+      expect(screen.getByTestId("inline-error")).toHaveTextContent(
+        "Invalid Bangladeshi phone number.",
+      ),
+    );
   });
 
   it("successful save updates phone and exits edit mode", async () => {
     render(<PhoneSection userId="user-123" />);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText("Edit phone")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("Edit phone"));
     const input = screen.getByTestId("phone-input");
     fireEvent.change(input, { target: { value: "01712345678" } });
     fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(screen.getByText("+8801712345678")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("+8801712345678")).toBeInTheDocument(),
+    );
   });
 });

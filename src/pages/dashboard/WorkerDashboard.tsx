@@ -180,6 +180,7 @@ const WorkerDashboard = () => {
         setAvailable([]);
         setActive([]);
         setHasLocation(true);
+        setReviewedJobIds(new Set());
       }
     } finally {
       setLoading(false);
@@ -418,7 +419,6 @@ const WorkerDashboard = () => {
   );
 
   return (
-    <>
     <DashboardShell title="Job board" subtitle="Browse open requests and manage your active work.">
       {!loading && !hasLocation && (
         <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-primary p-4">
@@ -549,7 +549,6 @@ const WorkerDashboard = () => {
           </TabsContent>
         </Tabs>
       )}
-    </DashboardShell>
       {reviewing && reviewing.customer && (
         <ReviewDialog
           open={!!reviewing}
@@ -564,7 +563,7 @@ const WorkerDashboard = () => {
           }}
         />
       )}
-    </>
+    </DashboardShell>
   );
 
 };

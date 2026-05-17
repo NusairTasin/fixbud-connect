@@ -29,10 +29,3 @@ export function validateOfferAmount(amount: number): boolean {
   if (amount < 0) return false;
   return Math.round(amount * 100) / 100 === amount;
 }
-
-/**
- * Returns a new array of offers sorted by round_number ascending.
- */
-export function sortOffersByRound(offers: BidOffer[]): BidOffer[] {
-  return [...offers].sort((a, b) => a.round_number - b.round_number);
-}

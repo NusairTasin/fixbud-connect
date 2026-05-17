@@ -34,13 +34,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Set up listener FIRST
+    let initialSessionHandled = false;
+
+    // onAuthStateChange fires synchronously with INITIAL_SESSION on mount,
+    // so we use it as the single source of truth and skip the getSession role fetch
+    // if it already ran — preventing the double fetchRole on startup.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
         setLoading(true);
-        // Defer Supabase calls to avoid deadlocks
+        // Defer Supabase calls to avoid deadlocks inside the auth callback
         setTimeout(() => {
           fetchRole(newSession.user.id).finally(() => setLoading(false));
         }, 0);
@@ -48,10 +52,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRole(null);
         setLoading(false);
       }
+      initialSessionHandled = true;
     });
 
-    // Then fetch existing session
+    // Fallback: if onAuthStateChange didn't fire synchronously (edge case),
+    // getSession ensures we still resolve the initial state.
     supabase.auth.getSession().then(({ data: { session: existing } }) => {
+      if (initialSessionHandled) return; // already handled above
       setSession(existing);
       setUser(existing?.user ?? null);
       if (existing?.user) {

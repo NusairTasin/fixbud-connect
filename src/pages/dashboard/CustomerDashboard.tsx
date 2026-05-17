@@ -16,7 +16,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wrench, Star, ChevronDown } from "lucide-react";
+import { Loader2, Star, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneContact } from "@/components/fixbud/PhoneContact";
 
@@ -62,10 +62,26 @@ const CustomerDashboard = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [defaultCat, setDefaultCat] = useState<string | undefined>();
   const [reviewedJobIds, setReviewedJobIds] = useState<Set<string>>(new Set());
   const [reviewing, setReviewing] = useState<Job | null>(null);
   const [jobThreads, setJobThreads] = useState<Record<string, ThreadBid[]>>({});
+
+  /** Enriches a job list with worker phone numbers for accepted/completed jobs. */
+  const attachPhones = async (jobList: Job[]): Promise<Job[]> =>
+    Promise.all(
+      jobList.map(async (j) => {
+        if ((j.status === "accepted" || j.status === "completed") && j.worker_id) {
+          try {
+            const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.worker_id });
+            return { ...j, workerPhone: (data as string | null) ?? null };
+          } catch (phoneErr) {
+            console.error("Failed to fetch worker phone for job", j.id, phoneErr);
+            return { ...j, workerPhone: null };
+          }
+        }
+        return j;
+      }),
+    );
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -85,41 +101,27 @@ const CustomerDashboard = () => {
       if (jobsRes.error) throw jobsRes.error;
       if (catsRes.error) throw catsRes.error;
       setCategories(catsRes.data ?? []);
-      setJobs((jobsRes.data ?? []) as unknown as Job[]);
       setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
-      // Fetch worker phone for accepted/completed jobs
+
       const loadedJobs = (jobsRes.data ?? []) as unknown as Job[];
-      const jobsWithPhone = await Promise.all(
-        loadedJobs.map(async (j) => {
-          if ((j.status === "accepted" || j.status === "completed") && j.worker_id) {
-            try {
-              const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.worker_id });
-              return { ...j, workerPhone: (data as string | null) ?? null };
-            } catch (phoneErr) {
-              console.error("Failed to fetch worker phone for job", j.id, phoneErr);
-              return { ...j, workerPhone: null };
-            }
-          }
-          return j;
-        }),
-      );
+      const jobsWithPhone = await attachPhones(loadedJobs);
       setJobs(jobsWithPhone as unknown as Job[]);
+
       // Fetch threads for pending jobs
-      const pendingJobs = (jobsWithPhone as unknown as Job[]).filter(j => j.status === 'pending');
+      const pendingJobs = jobsWithPhone.filter((j) => j.status === "pending");
       const threadsMap: Record<string, ThreadBid[]> = {};
       await Promise.all(
         pendingJobs.map(async (j) => {
           const { data } = await supabase
-            .from('bids')
-            .select('id, worker_id, status, worker:profiles!bids_worker_id_fkey(id, name)')
-            .eq('job_id', j.id)
-            .neq('status', 'withdrawn');
+            .from("bids")
+            .select("id, worker_id, status, worker:profiles!bids_worker_id_fkey(id, name)")
+            .eq("job_id", j.id)
+            .neq("status", "withdrawn");
           threadsMap[j.id] = (data ?? []) as unknown as ThreadBid[];
-        })
+        }),
       );
       setJobThreads(threadsMap);
     } catch (err: any) {
-      // If the rich query fails (e.g. migration not applied), fall back to a simple job fetch
       console.error("Failed to load jobs with extended query:", err);
       toast.error?.("Unable to load extended job details; showing basic job list.");
       try {
@@ -133,6 +135,7 @@ const CustomerDashboard = () => {
           supabase.from("reviews").select("job_id").eq("customer_id", user.id),
         ]);
         setCategories(catsRes.data ?? []);
+        setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
         const fallbackJobs = ((jobsRes.data ?? []) as any[]).map((r) => ({
           id: r.id,
           title: r.title,
@@ -148,22 +151,7 @@ const CustomerDashboard = () => {
           service_categories: null,
           worker: r.worker_id ? { id: r.worker_id, name: "" } : null,
         })) as unknown as Job[];
-        const fallbackWithPhone = await Promise.all(
-          fallbackJobs.map(async (j) => {
-            if ((j.status === "accepted" || j.status === "completed") && j.worker_id) {
-              try {
-                const { data } = await supabase.rpc("get_contact_phone", { target_user_id: j.worker_id });
-                return { ...j, workerPhone: (data as string | null) ?? null };
-              } catch (phoneErr) {
-                console.error("Failed to fetch worker phone for job", j.id, phoneErr);
-                return { ...j, workerPhone: null };
-              }
-            }
-            return j;
-          }),
-        );
-        setJobs(fallbackWithPhone as unknown as Job[]);
-        setReviewedJobIds(new Set((reviewsRes.data ?? []).map((r) => r.job_id)));
+        setJobs((await attachPhones(fallbackJobs)) as unknown as Job[]);
       } catch (err2: any) {
         console.error("Fallback job load failed:", err2);
         setCategories([]);
@@ -216,40 +204,28 @@ const CustomerDashboard = () => {
 
   return (
     <DashboardShell title="Find a pro" subtitle="Browse categories or post a custom job.">
-      <section className="mb-12">
-        <div className="mb-4 flex items-center justify-between">
+      <section className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Service categories</h2>
           <PostJobDialog onCreated={load} />
         </div>
         {loading ? (
-          <div className="flex justify-center py-10">
+          <div className="flex justify-center py-6">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
-              <Card
+              <PostJobDialog
                 key={c.id}
-                className="group cursor-pointer p-5 transition-shadow hover:shadow-[var(--shadow-soft)]"
-                onClick={() => setDefaultCat(c.id)}
-              >
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
-                  <Wrench className="h-5 w-5" />
-                </div>
-                <h3 className="font-semibold">{c.name}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {c.description}
-                </p>
-                <PostJobDialog
-                  defaultCategoryId={c.id}
-                  onCreated={load}
-                  trigger={
-                    <Button variant="ghost" size="sm" className="mt-3 px-0 text-primary">
-                      Post in {c.name} →
-                    </Button>
-                  }
-                />
-              </Card>
+                defaultCategoryId={c.id}
+                onCreated={load}
+                trigger={
+                  <button className="rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium transition-colors hover:bg-secondary hover:text-primary">
+                    {c.name}
+                  </button>
+                }
+              />
             ))}
           </div>
         )}
@@ -385,18 +361,6 @@ const CustomerDashboard = () => {
           </div>
         )}
       </section>
-
-      {/* Hidden trigger consumer for category-quick-post */}
-      {defaultCat && (
-        <PostJobDialog
-          defaultCategoryId={defaultCat}
-          trigger={<span className="hidden" />}
-          onCreated={() => {
-            setDefaultCat(undefined);
-            load();
-          }}
-        />
-      )}
 
       {reviewing && reviewing.worker && (
         <ReviewDialog

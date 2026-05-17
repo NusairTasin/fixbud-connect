@@ -35,10 +35,6 @@ interface SavedAddress {
   is_default: boolean;
 }
 
-interface Profile {
-  default_address_id: string | null;
-}
-
 interface ReviewItem {
   id: string;
   rating: number;
@@ -180,7 +176,7 @@ const ProfilePage = () => {
       }
     }
     setLoading(false);
-  }, [user]);
+  }, [user, role]);
 
   useEffect(() => { load(); }, [load]);
 
